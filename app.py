@@ -50,32 +50,32 @@ if not st.session_state.expenses.empty:
     # 2. Room Breakdown Section
     st.subheader("Room-by-Room Totals")
     room_data = st.session_state.expenses.groupby('Room')['Cost'].sum()
-    
-    # Display room metrics in a grid
     r_cols = st.columns(4) 
     for i, (r_name, r_total) in enumerate(room_data.items()):
         r_cols[i % 4].metric(label=r_name, value=f"£{r_total:,.0f}")
     
     st.write("---")
 
-    # 3. Filtering and Detailed View
+    # 3. Interactive Editor & Visualization
     col_table, col_viz = st.columns([2, 1])
     
     with col_table:
-        st.subheader("Detailed Expense Log")
-        filter_room = st.selectbox("Filter view by Room:", ["All"] + room_options)
+        st.subheader("Manage Expenses")
+        st.write("💡 *To delete: Select a row and press 'Backspace' or 'Delete' on your keyboard. You can also edit values directly.*")
         
-        display_df = st.session_state.expenses
-        if filter_room != "All":
-            display_df = display_df[display_df['Room'] == filter_room]
-            
-        st.dataframe(display_df, use_container_width=True)
+        # This replaces st.dataframe and allows for individual row management
+        edited_df = st.data_editor(
+            st.session_state.expenses,
+            use_container_width=True,
+            num_rows="dynamic", # This allows you to delete/add rows
+            key="expense_editor"
+        )
         
-        if st.button("Delete Last Entry"):
-            if len(st.session_state.expenses) > 0:
-                st.session_state.expenses = st.session_state.expenses[:-1]
-                st.session_state.expenses.to_csv(DATA_FILE, index=False)
-                st.rerun()
+        # Save changes if the user edits the table or deletes a row
+        if not edited_df.equals(st.session_state.expenses):
+            st.session_state.expenses = edited_df
+            st.session_state.expenses.to_csv(DATA_FILE, index=False)
+            st.rerun()
 
     with col_viz:
         st.subheader("Spending by Category")
@@ -84,6 +84,6 @@ if not st.session_state.expenses.empty:
         
         st.subheader("Spending by Priority")
         prio_data = st.session_state.expenses.groupby('Priority')['Cost'].sum()
-        st.bar_chart(prio_data) # Swapped from pie_chart to bar_chart to fix the error
+        st.bar_chart(prio_data)
 else:
     st.info("Your tracker is empty. Use the sidebar to add your first expense!")
