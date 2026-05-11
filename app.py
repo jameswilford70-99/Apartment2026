@@ -79,11 +79,13 @@ if not st.session_state.expenses.empty:
 
     with col_viz:
         st.subheader("Spending by Category")
-        cat_data = st.session_state.expenses.groupby('Category')['Cost'].sum()
-        st.bar_chart(cat_data)
+        cat_data = st.session_state.expenses.groupby('Category', as_index=False)['Cost'].sum()
+        # Use 'color' parameter to differentiate bars
+        st.bar_chart(cat_data, x="Category", y="Cost", color="Category")
         
         st.subheader("Spending by Priority")
-        prio_data = st.session_state.expenses.groupby('Priority')['Cost'].sum()
-        st.bar_chart(prio_data)
+        prio_data = st.session_state.expenses.groupby('Priority', as_index=False)['Cost'].sum()
+        # Use 'color' parameter to differentiate bars
+        st.bar_chart(prio_data, x="Priority", y="Cost", color="Priority")
 else:
     st.info("Your tracker is empty. Use the sidebar to add your first expense!")
