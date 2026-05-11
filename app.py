@@ -1,111 +1,54 @@
 import streamlit as st
 import pandas as pd
-import gspread
-from google.oauth2.service_account import Credentials
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="Apartment Tracker", layout="wide")
+# Page Configuration
+st.set_page_config(page_title="Home Purchase Tracker", layout="wide")
 
-# Google Sheets Auth setup
-scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-creds = Credentials.from_service_account_file("secrets.json", scopes=scopes)
-client = gspread.authorize(creds)
+st.title("🏠 New Apartment Budget Tracker")
+st.write("Keep track of your spending and upcoming costs in one place.")
 
-# Open the Google Sheet
-SHEET_NAME = "Apartment_Budget"
-sheet = client.open(SHEET_NAME).sheet1
+# Initialize session state for data storage
+if 'expenses' not in st.session_state:
+    st.session_state.expenses = pd.DataFrame(columns=['Item', 'Category', 'Priority', 'Cost'])
 
-# --- HELPER FUNCTIONS ---
-def load_data():
-    data = sheet.get_all_records()
-    df = pd.DataFrame(data)
-    if df.empty:
-        # Create empty dataframe with columns if sheet is totally blank below headers
-        df = pd.DataFrame(columns=["Item", "Category", "Priority", "Status", "Planned_Cost", "Actual_Cost"])
-    else:
-        # Ensure costs are numeric
-        df['Planned_Cost'] = pd.to_numeric(df['Planned_Cost'], errors='coerce').fillna(0)
-        df['Actual_Cost'] = pd.to_numeric(df['Actual_Cost'], errors='coerce').fillna(0)
-    return df
-
-def add_item_to_sheet(item_data):
-    # Append a new row to the Google Sheet
-    sheet.append_row(item_data)
-
-# --- MAIN APP ---
-st.title("🏗️ New Apartment Budget & Prep Tracker")
-
-df = load_data()
-
-# --- TOP LEVEL METRICS ---
-st.markdown("### Budget Overview")
-col1, col2, col3, col4 = st.columns(4)
-
-total_planned = df['Planned_Cost'].sum()
-total_actual = df['Actual_Cost'].sum()
-variance = total_planned - total_actual
-
-# Calculate how much is allocated to the Sofa specifically
-sofa_data = df[df['Item'].str.contains('Sofa', case=False, na=False)]
-sofa_planned = sofa_data['Planned_Cost'].sum() if not sofa_data.empty else 0
-
-col1.metric("Total Planned Cost", f"£{total_planned:,.2f}")
-col2.metric("Actual Spend So Far", f"£{total_actual:,.2f}")
-col3.metric("Current Variance", f"£{variance:,.2f}", delta=f"£{variance:,.2f}", delta_color="normal")
-col4.metric("Sofa Allocation", f"£{sofa_planned:,.2f}")
-
-st.divider()
-
-# --- INPUT FORM ---
-st.sidebar.header("Add New Item / Expense")
-with st.sidebar.form("add_item_form", clear_on_submit=True):
-    item_name = st.text_input("Item / Expense Name", placeholder="e.g., Solicitor Fees, Corner Sofa...")
+# --- Sidebar: Data Entry ---
+st.sidebar.header("Add New Expense")
+with st.sidebar.form("expense_form", clear_on_submit=True):
+    item = st.text_input("Item Name (e.g., Solicitor Fees, Sofa)")
+    category = st.selectbox("Category", ["Purchase Costs", "Renovations", "Furniture", "Utilities/Admin", "Other"])
+    priority = st.select_slider("Priority", options=["Wishlist", "Medium", "Essential"])
+    cost = st.number_input("Estimated/Actual Cost (£)", min_value=0.0, step=10.0)
     
-    category = st.selectbox("Category", [
-        "Buying Costs (Solicitor, Stamp Duty, Survey)", 
-        "Living Room", 
-        "Kitchen", 
-        "Bedroom", 
-        "Bathroom",
-        "Luna's Corner",
-        "Misc / Decor"
-    ])
-    
-    priority = st.selectbox("Priority", ["Must-Have", "High", "Medium", "Low (Maybe Later)"])
-    
-    status = st.selectbox("Status", ["Researching", "Budgeted", "Ordered", "Paid & Delivered"])
-    
-    planned_cost = st.number_input("Planned Cost (£)", min_value=0.0, step=10.0)
-    actual_cost = st.number_input("Actual Cost (£) - Leave 0 if not paid yet", min_value=0.0, step=10.0)
-    
-    submit_button = st.form_submit_button("Add to Tracker")
-    
-    if submit_button and item_name:
-        new_row = [item_name, category, priority, status, planned_cost, actual_cost]
-        add_item_to_sheet(new_row)
-        st.success(f"Added {item_name} to the tracker!")
-        st.rerun()
+    submit = st.form_submit_button("Add to Tracker")
 
-# --- DATA VIEW & FILTERS ---
-st.markdown("### Expense Breakdown")
+if submit and item:
+    new_data = pd.DataFrame([[item, category, priority, cost]], columns=['Item', 'Category', 'Priority', 'Cost'])
+    st.session_state.expenses = pd.concat([st.session_state.expenses, new_data], ignore_index=True)
 
-# Filter controls
-f_col1, f_col2 = st.columns(2)
-cat_filter = f_col1.multiselect("Filter by Category", options=df['Category'].unique(), default=df['Category'].unique())
-stat_filter = f_col2.multiselect("Filter by Status", options=df['Status'].unique(), default=df['Status'].unique())
+# --- Main Dashboard ---
+if not st.session_state.expenses.empty:
+    # Key Metrics
+    total_spend = st.session_state.expenses['Cost'].sum()
+    st.metric(label="Total Running Cost", value=f"£{total_spend:,.2f}")
 
-filtered_df = df[(df['Category'].isin(cat_filter)) & (df['Status'].isin(stat_filter))]
+    # Layout: Table and Charts
+    col1, col2 = st.columns([2, 1])
 
-# Calculate difference column for display
-filtered_df['Difference'] = filtered_df['Planned_Cost'] - filtered_df['Actual_Cost']
+    with col1:
+        st.subheader("Expense Log")
+        st.dataframe(st.session_state.expenses, use_container_width=True)
+        
+        if st.button("Clear All Data"):
+            st.session_state.expenses = pd.DataFrame(columns=['Item', 'Category', 'Priority', 'Cost'])
+            st.rerun()
 
-# Display the styled dataframe
-st.dataframe(
-    filtered_df.style.format({
-        'Planned_Cost': '£{:,.2f}'.format,
-        'Actual_Cost': '£{:,.2f}'.format,
-        'Difference': '£{:,.2f}'.format
-    }),
-    use_container_width=True,
-    hide_index=True
-)
+    with col2:
+        st.subheader("Costs by Category")
+        cat_totals = st.session_state.expenses.groupby('Category')['Cost'].sum()
+        st.bar_chart(cat_totals)
+
+        st.subheader("Priority Breakdown")
+        priority_totals = st.session_state.expenses.groupby('Priority')['Cost'].sum()
+        st.pie_chart(priority_totals)
+else:
+    st.info("Your tracker is empty. Use the sidebar to add your first expense!")
