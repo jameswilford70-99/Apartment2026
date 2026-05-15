@@ -21,7 +21,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🏠 97 Plough Drive")
-st.subtitle("Property Purchase & Room Budget Tracker")
+st.subheader("Property Purchase & Room Budget Tracker")
 st.markdown("---")
 
 # 2. Initialize Session State Data (Pre-populated with your items)
